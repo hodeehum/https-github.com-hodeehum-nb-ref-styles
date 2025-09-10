@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { ART_STYLES, ART_STYLES_2, COLORS, EXTRA_COLORS, NUM_IMAGES_OPTIONS, RANDOM_PROMPTS, GUIDANCE_OPTIONS, ASPECT_RATIO_OPTIONS } from '../constants';
 import useLocalStorage from '../hooks/useLocalStorage';
@@ -36,8 +37,8 @@ const defaultValues = {
 };
 
 const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequest, generatedImages, onClearHistory }) => {
-  const [description, setDescription] = useLocalStorage('description', '');
-  const [negative, setNegative] = useLocalStorage('negative', '');
+  const [description, setDescription] = useLocalStorage('description', defaultValues.description);
+  const [negative, setNegative] = useLocalStorage('negative', defaultValues.negative);
   const [style1Name, setStyle1Name] = useLocalStorage('style1', defaultValues.style1Name);
   const [style2Name, setStyle2Name] = useLocalStorage('style2', defaultValues.style2Name);
   const [color, setColor] = useLocalStorage('color', defaultValues.color);
@@ -53,16 +54,18 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
   const [isElaborating, setIsElaborating] = useState(false);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
   
-  const originalPromptRef = useRef(description);
+  const originalPromptRef = useRef('');
   const finalPromptRef = useRef('');
 
   const { isLoading, loadingMessage, error, start: startGeneration, stop: stopGeneration, setError } = useImageProcessor({
-    onSuccess: (newImageData: { base64: string, mimeType: string }) => {
+    onSuccess: (newImageData: { base64: string, mimeType: string, width: number, height: number }) => {
       const newImage: GeneratedImage = {
         id: crypto.randomUUID(),
         base64: newImageData.base64,
         prompt: finalPromptRef.current,
-        mimeType: newImageData.mimeType as 'image/jpeg' | 'image/png'
+        mimeType: newImageData.mimeType as 'image/jpeg' | 'image/png',
+        width: newImageData.width,
+        height: newImageData.height,
       };
       onImagesGenerated([newImage]);
     },
@@ -110,25 +113,27 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
   const handleElaborateToggle = async (checked: boolean) => {
     setElaborate(checked);
     if (checked) {
-      if (!description.trim()) {
-        setElaborate(false);
-        return;
-      }
-      originalPromptRef.current = description;
-      setIsElaborating(true);
-      setError(null);
-      try {
-        const elaborated = await elaboratePrompt(description);
-        setDescription(elaborated);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Elaboration failed.');
-        setElaborate(false);
-        setDescription(originalPromptRef.current);
-      } finally {
-        setIsElaborating(false);
-      }
+        // Always save the current state before elaborating.
+        originalPromptRef.current = description;
+
+        const promptToElaborate = description.trim() || defaultValues.description;
+
+        setIsElaborating(true);
+        setError(null);
+        try {
+            const elaborated = await elaboratePrompt(promptToElaborate);
+            setDescription(elaborated);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Elaboration failed.');
+            setElaborate(false);
+            // On failure, restore the original prompt.
+            setDescription(originalPromptRef.current);
+        } finally {
+            setIsElaborating(false);
+        }
     } else {
-      setDescription(originalPromptRef.current);
+        // When toggling off, restore the saved original prompt.
+        setDescription(originalPromptRef.current);
     }
   };
 

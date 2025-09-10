@@ -52,7 +52,7 @@ const App: React.FC = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <h1 className="text-lg md:text-xl font-bold text-white tracking-tight">
-              Imagen/NB Image Generation Editing Combo With Built-In Reference Styles
+              Imagen / Nano Banana Image Generation/Editing Combo With Built-In Reference Styles
             </h1>
             <nav className="flex items-center gap-2 p-1 bg-gray-800 rounded-xl">
               <TabButton tab="generate" label="Generate" icon={<IconPhoto />} />

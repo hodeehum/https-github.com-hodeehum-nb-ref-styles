@@ -1,5 +1,3 @@
-
-
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio, GeneratedImage } from "../types";
 
@@ -59,7 +57,7 @@ const getApiError = (error: unknown): Error => {
 const cropWatermarkFromImage = (
   base64: string,
   mimeType: string
-): Promise<{ base64: string; mimeType: string }> => {
+): Promise<{ base64: string; mimeType: string; width: number; height: number }> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
@@ -91,7 +89,7 @@ const cropWatermarkFromImage = (
       const dataUrl = canvas.toDataURL(mimeType as 'image/png' | 'image/jpeg');
       const newBase64 = dataUrl.split(',')[1];
       
-      resolve({ base64: newBase64, mimeType });
+      resolve({ base64: newBase64, mimeType, width: canvas.width, height: canvas.height });
     };
     img.onerror = () => {
       reject(new Error("Failed to load image for processing."));
@@ -105,7 +103,7 @@ export const generateImage = async (
   aspectRatio: AspectRatio,
   negativePrompt?: string,
   seed?: number,
-): Promise<{ base64: string; mimeType: string }> => {
+): Promise<{ base64: string; mimeType: string; width: number; height: number }> => {
   try {
     if (aspectRatio === 'source') {
       // Fallback to 1:1 if 'source' is somehow passed to generate
@@ -124,6 +122,7 @@ export const generateImage = async (
 
     const outputMimeType = 'image/jpeg';
 
+    // Fix: 'aspectRatio' must be inside the 'config' object.
     const response = await ai.models.generateImages({
         model: 'imagen-4.0-generate-001',
         prompt: generationPrompt,
@@ -222,7 +221,7 @@ export const editImage = async (
     aspectRatio: AspectRatio | 'source',
     negativePrompt?: string,
     seed?: number
-): Promise<{ base64: string; mimeType: string }> => {
+): Promise<{ base64: string; mimeType: string; width: number; height: number }> => {
     try {
         let finalImages = images;
         let finalPrompt = prompt;
@@ -258,9 +257,10 @@ export const editImage = async (
                     { text: promptWithNegatives },
                 ],
             },
+            // The 'gemini-2.5-flash-image-preview' model only supports 'responseModalities' in the config.
+            // Other parameters like 'seed' are not supported.
             config: {
                 responseModalities: [Modality.IMAGE, Modality.TEXT],
-                ...(seed !== undefined && { seed }),
             },
         });
             

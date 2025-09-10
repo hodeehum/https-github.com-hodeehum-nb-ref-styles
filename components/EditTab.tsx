@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, DragEvent, useRef } from 'react';
 import { GeneratedImage, Style, AspectRatio } from '../types';
 import Spinner from './Spinner';
@@ -33,16 +34,18 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedImage, setSelectedImage] = useState<GeneratedImage | null>(null);
   
-  const originalPromptRef = useRef(prompt);
+  const originalPromptRef = useRef('');
   const finalPromptRef = useRef('');
 
   const { isLoading, loadingMessage, error, start: startEditing, stop: stopEditing, setError } = useImageProcessor({
-    onSuccess: (newImageData: { base64: string, mimeType: string }) => {
+    onSuccess: (newImageData: { base64: string, mimeType: string, width: number, height: number }) => {
       const newEditedImage: GeneratedImage = {
         id: crypto.randomUUID(),
         base64: newImageData.base64,
         prompt: finalPromptRef.current,
-        mimeType: newImageData.mimeType as 'image/jpeg' | 'image/png'
+        mimeType: newImageData.mimeType as 'image/jpeg' | 'image/png',
+        width: newImageData.width,
+        height: newImageData.height,
       };
       setEditedImages(prevImages => [newEditedImage, ...prevImages].slice(0, 12));
     }
@@ -105,18 +108,25 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        const base64String = (reader.result as string).split(',')[1];
-        newImages.push({
-          id: crypto.randomUUID(),
-          base64: base64String,
-          mimeType: file.type as 'image/jpeg' | 'image/png',
-          prompt: 'Uploaded image'
-        });
-        processedCount++;
-        if (processedCount === filesToProcess.length) {
-          setImagesToEdit(prev => [...prev, ...newImages]);
-          if(newImages.length > 0) setEditedImages([]);
-        }
+        const dataUrl = reader.result as string;
+        const img = new Image();
+        img.onload = () => {
+            const base64String = dataUrl.split(',')[1];
+            newImages.push({
+              id: crypto.randomUUID(),
+              base64: base64String,
+              mimeType: file.type as 'image/jpeg' | 'image/png',
+              prompt: 'Uploaded image',
+              width: img.width,
+              height: img.height,
+            });
+            processedCount++;
+            if (processedCount === filesToProcess.length) {
+              setImagesToEdit(prev => [...prev, ...newImages]);
+              if(newImages.length > 0) setEditedImages([]);
+            }
+        };
+        img.src = dataUrl;
       };
       reader.readAsDataURL(file);
     });
@@ -185,30 +195,30 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
   };
 
   const handleElaborateToggle = async (checked: boolean) => {
-      setElaborate(checked);
-      if (checked) {
-          // Toggling ON
-          if (!prompt.trim()) {
-              setElaborate(false);
-              return;
-          }
-          originalPromptRef.current = prompt; // Save current prompt
-          setIsElaborating(true);
-          setError(null);
-          try {
-              const elaborated = await elaboratePrompt(prompt);
-              setPrompt(elaborated);
-          } catch (err) {
-              setError(err instanceof Error ? err.message : 'Elaboration failed.');
-              setElaborate(false); // Revert toggle on error
-              setPrompt(originalPromptRef.current); // Revert prompt on error
-          } finally {
-              setIsElaborating(false);
-          }
-      } else {
-          // Toggling OFF
-          setPrompt(originalPromptRef.current); // Restore original
-      }
+    setElaborate(checked);
+    if (checked) {
+        // Always save the current state before elaborating.
+        originalPromptRef.current = prompt;
+        
+        const promptToElaborate = prompt.trim() || defaultPrompt;
+
+        setIsElaborating(true);
+        setError(null);
+        try {
+            const elaborated = await elaboratePrompt(promptToElaborate);
+            setPrompt(elaborated);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Elaboration failed.');
+            setElaborate(false);
+            // On failure, restore the original prompt.
+            setPrompt(originalPromptRef.current);
+        } finally {
+            setIsElaborating(false);
+        }
+    } else {
+        // When toggling off, restore the saved original prompt.
+        setPrompt(originalPromptRef.current);
+    }
   };
   
   const handleRandomPrompt = () => {

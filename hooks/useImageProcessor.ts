@@ -87,7 +87,9 @@ export const useImageProcessor = <T,>({ onSuccess }: UseImageProcessorOptions<T>
       }
 
       if (i < numImages - 1 && !isCancelled.current) {
-        const waitTime = 60100;
+        // Imagen-4 (Generate) is 10 RPM (~6s/request), Nano Banana (Edit) is 60 RPM (~1s/request).
+        // We add a small buffer to be safe.
+        const waitTime = processName === 'Generating' ? 6100 : 1100;
         const startWait = Date.now();
         let elapsed = 0;
         
