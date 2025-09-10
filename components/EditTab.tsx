@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, DragEvent, useRef } from 'react';
 import { GeneratedImage, Style, AspectRatio } from '../types';
 import Spinner from './Spinner';
@@ -332,13 +333,16 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
               <div className={`${isDragging ? 'pointer-events-none' : ''}`}>
                 {imagesToEdit.length > 0 && (
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                      {imagesToEdit.map((image, index) => (
+                      {imagesToEdit.map((image, index) => {
+                        const aspectRatio = image.width && image.height ? `${image.width} / ${image.height}` : '1 / 1';
+                        return (
                           <div key={image.id}>
                               <div className="text-center text-xs font-mono text-gray-400 mb-1">
                                   @img{index + 1}
                               </div>
                               <div 
-                                  className="relative group aspect-square cursor-pointer"
+                                  className="relative group cursor-pointer"
+                                  style={{ aspectRatio }}
                                   onClick={() => setSelectedImage(image)}
                               >
                                   <img src={`data:${image.mimeType};base64,${image.base64}`} alt={`Source ${index + 1}`} className="w-full h-full object-cover rounded-md border-2 border-transparent group-hover:border-indigo-500 transition-colors"/>
@@ -364,7 +368,8 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
                                   </button>
                               </div>
                           </div>
-                      ))}
+                        )
+                      })}
                   </div>
                 )}
 
