@@ -24,12 +24,10 @@ interface GenerateTabProps {
 
 const defaultValues = {
   description: 'A majestic lion in a futuristic city',
-  negative: 'low quality, lowres, blurry, out of focus, motion blur, distortion, grainy, camera shake, pixelated, jpeg artifacts, banding, posterization, noise, overexposed, underexposed, harsh shadows, blown highlights, washed out, oversaturated, oversharpened, haloing, color fringing, chromatic aberration, moire, tiling, duplicates, repeating patterns, out of frame, bad crop, cut off, frame, border, watermark, signature, bad anatomy, deformed, disfigured, malformed limbs, wrong hands, fused fingers, extra fingers, missing fingers, broken wrists, unnatural pose, distorted proportions, uncanny valley, wonky eyes, lazy eye, cross-eye, lopsided face, messy perspective, depth map errors, floating objects, clipping, intersecting limbs, mangled clothing, messy background, clutter, distracting elements, poor composition, misspelled anatomy, logo, text, misspelled text, caption',
   style1Name: 'No style',
   style2Name: 'No style',
   color: 'none',
   extraColor: 'none',
-  numImages: 1,
   guidance: 7,
   aspectRatio: '1:1' as AspectRatio,
   scratchpad: '',
@@ -39,12 +37,11 @@ const defaultValues = {
 
 const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequest, generatedImages, onClearHistory, isProcessing, setIsProcessing }) => {
   const [description, setDescription] = useLocalStorage('description', defaultValues.description);
-  const [negative, setNegative] = useLocalStorage('negative', defaultValues.negative);
   const [style1Name, setStyle1Name] = useLocalStorage('style1', defaultValues.style1Name);
   const [style2Name, setStyle2Name] = useLocalStorage('style2', defaultValues.style2Name);
   const [color, setColor] = useLocalStorage('color', defaultValues.color);
   const [extraColor, setExtraColor] = useLocalStorage('extraColor', defaultValues.extraColor);
-  const [numImages, setNumImages] = useLocalStorage('numImages', defaultValues.numImages);
+  const [numImages, setNumImages] = useLocalStorage('numImages', 1);
   const [guidance, setGuidance] = useLocalStorage('guidance', defaultValues.guidance);
   const [seed, setSeed] = useLocalStorage('generateSeed', '');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>(defaultValues.aspectRatio);
@@ -91,12 +88,11 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
     setError(null);
     try {
       const promptToUse = description || defaultValues.description;
-      const negativeToUse = negative || defaultValues.negative;
-      const { finalPrompt, finalNegativePrompt } = constructFinalPrompt(promptToUse, negativeToUse, style1, style2, color, extraColor, guidance);
+      const finalPrompt = constructFinalPrompt(promptToUse, style1, style2, color, extraColor, guidance);
       
       finalPromptRef.current = finalPrompt;
 
-      const processFunction = () => generateImage(finalPrompt, aspectRatio, finalNegativePrompt, seed ? parseInt(seed, 10) : undefined);
+      const processFunction = () => generateImage(finalPrompt, aspectRatio, seed ? parseInt(seed, 10) : undefined);
       
       await startGeneration(processFunction, numImages);
 
@@ -143,12 +139,11 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
 
   const handleReset = useCallback(() => {
     setDescription(defaultValues.description);
-    setNegative(defaultValues.negative);
     setStyle1Name(defaultValues.style1Name);
     setStyle2Name(defaultValues.style2Name);
     setColor(defaultValues.color);
     setExtraColor(defaultValues.extraColor);
-    setNumImages(defaultValues.numImages);
+    setNumImages(1);
     setGuidance(defaultValues.guidance);
     setSeed('');
     setAspectRatio(defaultValues.aspectRatio);
@@ -157,7 +152,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
     setElaborate(defaultValues.elaborate);
     originalPromptRef.current = defaultValues.description;
     setError(null);
-  }, [setDescription, setNegative, setStyle1Name, setStyle2Name, setColor, setExtraColor, setNumImages, setGuidance, setSeed, setAspectRatio, setScratchpad, setShowScratchpad, setElaborate, setError]);
+  }, [setDescription, setStyle1Name, setStyle2Name, setColor, setExtraColor, setNumImages, setGuidance, setSeed, setAspectRatio, setScratchpad, setShowScratchpad, setElaborate, setError]);
   
   const groupedStyles = useMemo(() => {
     return ART_STYLES.reduce((acc, style) => {
@@ -233,25 +228,6 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
                             <IconDice />
                         </button>
                         <button onClick={() => setDescription('')} title="Clear Prompt" className="block bg-gray-600 p-2 rounded-md hover:bg-gray-500 transition-colors text-gray-300">
-                            <IconBrain />
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div className="flex flex-col">
-                <label htmlFor="negative" className="block text-sm font-medium text-gray-300 mb-1">Negative Prompt</label>
-                <div className="relative">
-                    <textarea 
-                        id="negative" 
-                        value={negative} 
-                        onChange={e => setNegative(e.target.value)} 
-                        rows={4} 
-                        className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 pr-12 text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition" 
-                        placeholder={defaultValues.negative} 
-                    />
-                    <div className="absolute top-2 right-2">
-                        <button onClick={() => setNegative('')} title="Clear Negative Prompt" className="block bg-gray-600 p-2 rounded-md hover:bg-gray-500 transition-colors text-gray-300">
                             <IconBrain />
                         </button>
                     </div>

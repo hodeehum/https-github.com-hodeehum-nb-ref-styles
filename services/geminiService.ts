@@ -235,7 +235,6 @@ const cropWatermarkFromImage = async (base64Image: string, mimeType: string): Pr
 export const generateImage = async (
     prompt: string,
     aspectRatio: AspectRatio,
-    negativePrompt: string,
     seed?: number
 ): Promise<{ base64: string, mimeType: string, width: number, height: number }> => {
     try {
@@ -246,7 +245,6 @@ export const generateImage = async (
                 numberOfImages: 1,
                 outputMimeType: 'image/jpeg',
                 aspectRatio: aspectRatio === 'source' ? '1:1' : aspectRatio, // Default to 1:1 if 'source' is passed
-                negativePrompt: negativePrompt,
                 seed: seed,
             },
         });
@@ -266,7 +264,6 @@ export const editImage = async (
     sourceImages: GeneratedImage[],
     prompt: string,
     aspectRatio: AspectRatio,
-    negativePrompt: string,
     seed?: number
 ): Promise<{ base64: string, mimeType: string, width: number, height: number }> => {
     try {

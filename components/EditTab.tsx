@@ -248,7 +248,6 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
   const handleEdit = async () => {
     setError(null);
     let finalPrompt = prompt || defaultPrompt;
-    let finalNegativePrompt = '';
 
     const imgRefRegex = /@img[1-8]/g;
     if (imgRefRegex.test(finalPrompt) && imagesToEdit.length === 0) {
@@ -274,13 +273,9 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
         }
       }
       
-      if (selectedStyle && selectedStyle.name !== 'No style') {
-        finalNegativePrompt = resolveRandomChoices(selectedStyle.negative.replace(/\[input\.negative\]/g, ''));
-      }
-      
       finalPromptRef.current = finalPrompt;
 
-      const processFunction = () => editImage(imagesToEdit, finalPrompt, aspectRatio, finalNegativePrompt, seed ? parseInt(seed, 10) : undefined);
+      const processFunction = () => editImage(imagesToEdit, finalPrompt, aspectRatio, seed ? parseInt(seed, 10) : undefined);
       
       await startEditing(processFunction, numImages, 'Applying edit');
 

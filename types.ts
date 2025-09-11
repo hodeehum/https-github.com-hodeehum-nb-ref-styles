@@ -3,7 +3,6 @@ export interface Style {
   category: string;
   name: string;
   prompt: string;
-  negative: string;
 }
 
 export interface GeneratedImage {

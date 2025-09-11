@@ -12,13 +12,12 @@ export const resolveRandomChoices = (text: string): string => {
 
 export const constructFinalPrompt = (
   description: string,
-  negative: string,
   style1: Style,
   style2: Style,
   color: string,
   extraColor: string,
   guidance: number
-): { finalPrompt: string; finalNegativePrompt: string } => {
+): string => {
   // The description is used directly without variable substitution.
   const finalDescription = description;
   
@@ -51,16 +50,7 @@ export const constructFinalPrompt = (
 
   const positivePrompt = promptParts.filter(p => p && p !== '.').join(', ');
   
-  // Combine negative prompts from user input and both styles
-  const negativePromptParts = [
-      style1.negative.replace(/\[input\.negative\]/g, negative),
-      style2.negative.replace(/\[input\.negative\]/g, ''), // style2 doesn't use the placeholder, but remove it just in case
-  ];
-
-  let finalNegativePrompt = negativePromptParts.filter(p => p && p.trim()).join(', ');
-  finalNegativePrompt = resolveRandomChoices(finalNegativePrompt);
-  
   const finalPrompt = positivePrompt;
 
-  return { finalPrompt, finalNegativePrompt };
+  return finalPrompt;
 };
