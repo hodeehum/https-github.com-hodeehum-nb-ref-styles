@@ -18,7 +18,7 @@ export class QuotaError extends Error {
 }
 
 // Initialize the GoogleGenAI client directly with the API key from environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const getApiError = (error: unknown): Error => {
     console.error("Gemini API Error:", error);
