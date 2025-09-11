@@ -54,19 +54,74 @@ const getApiError = (error: unknown): Error => {
     return new Error("An unknown error occurred. Please check the console for details.");
 };
 
-const cropWatermarkFromImage = (
-  base64: string,
+export const sanitizeImage = (
+  dataUrl: string,
   mimeType: string
-): Promise<{ base64: string; mimeType: string; width: number; height: number }> => {
+): Promise<{ base64: string; mimeType: 'image/png' }> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      // Robust validation for the image returned from the API to prevent crashes.
-      if (!isFinite(img.width) || !isFinite(img.height) || img.width <= 0 || img.height <= 0) {
-        return reject(new Error("The image returned by the model has invalid dimensions (e.g., width or height is zero). This may be due to a model error or safety filter."));
+      // Re-check pixel count here as EXIF rotation can swap width and height.
+      const MAX_PIXELS = 16 * 1024 * 1024; // 16 Megapixels
+      if (img.width * img.height > MAX_PIXELS) {
+        return reject(new Error(`The image dimensions (${img.width}x${img.height}) are too large to process in the browser. The total pixel count exceeds the ${MAX_PIXELS / 1_000_000} megapixel limit.`));
       }
 
+      if (!isFinite(img.width) || !isFinite(img.height) || img.width <= 0 || img.height <= 0) {
+        return reject(new Error("Source image has invalid dimensions after loading. It might be corrupt."));
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        return reject(new Error("Could not get canvas context for sanitizing image."));
+      }
+      
+      try {
+        ctx.drawImage(img, 0, 0);
+      } catch (e) {
+        console.error("Error drawing image during sanitization:", e);
+        return reject(new Error("Failed to process the uploaded image. It might be corrupt or in an unsupported format."));
+      }
+
+      const newMimeType = 'image/png';
+      const newDataUrl = canvas.toDataURL(newMimeType);
+      const newBase64 = newDataUrl.split(',')[1];
+      
+      if (!newBase64) {
+        return reject(new Error("Failed to generate a clean image. The canvas may have been tainted or the image is too large."));
+      }
+
+      resolve({ base64: newBase64, mimeType: newMimeType });
+    };
+    img.onerror = () => {
+      reject(new Error("Failed to load the uploaded image. It may be corrupt or in an unsupported format."));
+    };
+    img.src = dataUrl;
+  });
+};
+
+const cropWatermarkFromImage = async (
+  base64: string,
+  mimeType: string
+): Promise<{ base64: string; mimeType: string; width: number; height: number }> => {
+  const MAX_BASE64_LENGTH = 25 * 1024 * 1024; // Approx 18.75MB image limit
+  if (base64.length > MAX_BASE64_LENGTH) {
+    throw new Error(`The image returned by the model is too large to process in the browser (>${Math.round(MAX_BASE64_LENGTH / (1024 * 1024))}MB).`);
+  }
+
+  // Sanitize first to handle any potential EXIF issues from the model's output, which can cause memory crashes.
+  const sanitized = await sanitizeImage(`data:${mimeType};base64,${base64}`, mimeType);
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      // `sanitizeImage` has already validated the dimensions, so this image is safe to process.
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -77,12 +132,10 @@ const cropWatermarkFromImage = (
       const watermarkHeightRatio = 28 / 1024;
       const watermarkHeight = Math.round(img.height * watermarkHeightRatio);
       
-      // Determine the source dimensions for drawing (full image or cropped).
       const sourceY = 0;
       const sourceWidth = img.width;
       const sourceHeight = (img.height > watermarkHeight) ? img.height - watermarkHeight : img.height;
       
-      // Ensure canvas dimensions are valid and at least 1px to prevent errors.
       canvas.width = Math.max(1, sourceWidth);
       canvas.height = Math.max(1, sourceHeight);
       
@@ -93,7 +146,6 @@ const cropWatermarkFromImage = (
       ctx.imageSmoothingQuality = 'high';
       
       try {
-        // Draw the cropped image onto the canvas.
         ctx.drawImage(img, 0, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
       } catch (e) {
           console.error("Error during watermark crop drawImage:", e, {
@@ -103,19 +155,21 @@ const cropWatermarkFromImage = (
           return reject(new Error("Failed to crop watermark from the returned image. It might be corrupt."));
       }
       
-      const dataUrl = canvas.toDataURL(mimeType as 'image/png' | 'image/jpeg');
+      const finalMimeType = sanitized.mimeType; // Always 'image/png' after sanitization
+      const dataUrl = canvas.toDataURL(finalMimeType);
       const newBase64 = dataUrl.split(',')[1];
 
       if (!newBase64) {
         return reject(new Error("Failed to generate a valid image after cropping."));
       }
       
-      resolve({ base64: newBase64, mimeType, width: canvas.width, height: canvas.height });
+      resolve({ base64: newBase64, mimeType: finalMimeType, width: canvas.width, height: canvas.height });
     };
     img.onerror = () => {
-      reject(new Error("Failed to load the model's output image for processing. It may be corrupt or in an unsupported format."));
+      reject(new Error("Failed to load the model's sanitized output image for processing."));
     };
-    img.src = `data:${mimeType};base64,${base64}`;
+    // Use the sanitized data URL for loading
+    img.src = `data:${sanitized.mimeType};base64,${sanitized.base64}`;
   });
 };
 
@@ -178,9 +232,19 @@ const createCanvasWithImage = (
   targetAspectRatio: AspectRatio
 ): Promise<{ base64: string; mimeType: 'image/png' }> => {
   return new Promise((resolve, reject) => {
+    const MAX_BASE64_LENGTH = 25 * 1024 * 1024; // Approx 18.75MB image limit
+    if (sourceImage.base64.length > MAX_BASE64_LENGTH) {
+        return reject(new Error(`The source image file is too large to process in the browser (>${Math.round(MAX_BASE64_LENGTH / (1024 * 1024))}MB). Please upload a smaller image.`));
+    }
+
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      const MAX_PIXELS = 16 * 1024 * 1024; // 16 Megapixels
+      if (img.width * img.height > MAX_PIXELS) {
+        return reject(new Error(`The source image dimensions (${img.width}x${img.height}) are too large to process in the browser. Please use an image with fewer than ${MAX_PIXELS / 1_000_000} megapixels.`));
+      }
+      
       // More robust validation for image dimensions to prevent division-by-zero or other rendering errors.
       if (!isFinite(img.width) || !isFinite(img.height) || img.width <= 0 || img.height <= 0) {
         return reject(new Error("Source image has invalid dimensions (e.g., width or height is zero, negative, or not a number)."));

@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo, useCallback, DragEvent, useRef, useEffect } from 'react';
 import { GeneratedImage, Style, AspectRatio } from '../types';
 import Spinner from './Spinner';
-import { editImage, elaboratePrompt } from '../services/geminiService';
+import { editImage, elaboratePrompt, sanitizeImage } from '../services/geminiService';
 import { IconUpload, IconSparkles, IconClose, IconStop, IconReset, IconBrain, IconDownload, IconDice } from './Icons';
 import { ART_STYLES, NUM_IMAGES_OPTIONS, RANDOM_PROMPTS } from '../constants';
 import Select from './Select';
@@ -83,7 +82,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
     setShowScratchpad(false);
   }, [setImagesToEdit, setEditedImages, setPrompt, setReferenceStyleName, setNumImages, setElaborate, setAspectRatio, setSeed, setScratchpad, setShowScratchpad, setError]);
 
-  const processFiles = useCallback((files: File[]) => {
+  const processFiles = useCallback(async (files: File[]) => {
     if (!files || files.length === 0) return;
 
     const remainingSlots = 8 - imagesToEdit.length;
@@ -92,51 +91,61 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
         return;
     }
 
-    const filesToProcess = files.slice(0, remainingSlots);
+    const filesToProcess = Array.from(files).slice(0, remainingSlots);
 
     if (files.length > remainingSlots) {
-      setError(`You can only upload ${remainingSlots} more image(s). ${files.length - remainingSlots} files were ignored.`);
+        setError(`You can only upload ${remainingSlots} more image(s). ${files.length - remainingSlots} files were ignored.`);
     } else {
-      setError(null);
+        setError(null);
     }
 
     const newImages: GeneratedImage[] = [];
-    let processedCount = 0;
+    
+    // Process files sequentially to avoid race conditions with state updates
+    for (const file of filesToProcess) {
+        if (!file.type.startsWith('image/')) {
+            continue; // Skip non-image files
+        }
 
-    filesToProcess.forEach(file => {
-      if (!file.type.startsWith('image/')) {
-          processedCount++;
-          if (processedCount === filesToProcess.length) {
-              setImagesToEdit(prev => [...prev, ...newImages]);
-              if(newImages.length > 0) setEditedImages([]);
-          }
-          return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
-        const img = new Image();
-        img.onload = () => {
-            const base64String = dataUrl.split(',')[1];
-            newImages.push({
-              id: crypto.randomUUID(),
-              base64: base64String,
-              mimeType: file.type as 'image/jpeg' | 'image/png',
-              prompt: 'Uploaded image',
-              width: img.width,
-              height: img.height,
+        try {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
             });
-            processedCount++;
-            if (processedCount === filesToProcess.length) {
-              setImagesToEdit(prev => [...prev, ...newImages]);
-              if(newImages.length > 0) setEditedImages([]);
-            }
-        };
-        img.src = dataUrl;
-      };
-      reader.readAsDataURL(file);
-    });
-  }, [imagesToEdit.length, setImagesToEdit, setEditedImages, setError]);
+            
+            // Sanitize the image to handle EXIF orientation and potential corruption
+            const sanitized = await sanitizeImage(dataUrl, file.type);
+            
+            const { width, height } = await new Promise<{width: number, height: number}>((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve({ width: img.width, height: img.height });
+                img.onerror = reject;
+                img.src = `data:${sanitized.mimeType};base64,${sanitized.base64}`;
+            });
+
+            newImages.push({
+                id: crypto.randomUUID(),
+                base64: sanitized.base64,
+                mimeType: sanitized.mimeType,
+                prompt: 'Uploaded image',
+                width,
+                height,
+            });
+        } catch (e) {
+            const message = e instanceof Error ? e.message : 'An unknown error occurred while processing a file.';
+            setError(message);
+            // Stop processing further files if one fails, as it might be a systematic issue.
+            break; 
+        }
+    }
+
+    if (newImages.length > 0) {
+        setImagesToEdit(prev => [...prev, ...newImages].slice(-8)); // Use slice to be extra safe
+        if (editedImages.length > 0) setEditedImages([]);
+    }
+  }, [imagesToEdit.length, editedImages.length, setImagesToEdit, setEditedImages, setError]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
