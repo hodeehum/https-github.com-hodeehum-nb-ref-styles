@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import useLocalStorage from './hooks/useLocalStorage';
 import GenerateTab from './components/GenerateTab';
@@ -12,6 +11,7 @@ const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('generate');
   const [generatedImages, setGeneratedImages] = useLocalStorage<GeneratedImage[]>('generationHistory', []);
   const [imagesToEdit, setImagesToEdit] = useState<GeneratedImage[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   const handleEditRequest = useCallback((image: GeneratedImage) => {
     setImagesToEdit(prev => {
@@ -32,14 +32,15 @@ const App: React.FC = () => {
     setGeneratedImages([]);
   }, [setGeneratedImages]);
 
-  const TabButton = ({ tab, label, icon }: { tab: Tab; label: string; icon: React.ReactNode }) => (
+  const TabButton = ({ tab, label, icon, disabled }: { tab: Tab; label: string; icon: React.ReactNode; disabled?: boolean }) => (
     <button
       onClick={() => setActiveTab(tab)}
+      disabled={disabled}
       className={`flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium rounded-lg transition-all duration-200 ${
         activeTab === tab 
           ? 'bg-indigo-600 text-white shadow-lg' 
           : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-      }`}
+      } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       {icon}
       {label}
@@ -55,8 +56,8 @@ const App: React.FC = () => {
               Imagen / Nano Banana Image Generation/Editing Combo With Built-In Reference Styles
             </h1>
             <nav className="flex items-center gap-2 p-1 bg-gray-800 rounded-xl">
-              <TabButton tab="generate" label="Generate" icon={<IconPhoto />} />
-              <TabButton tab="edit" label="Edit" icon={<IconEdit />} />
+              <TabButton tab="generate" label="Generate" icon={<IconPhoto />} disabled={isProcessing} />
+              <TabButton tab="edit" label="Edit" icon={<IconEdit />} disabled={isProcessing} />
             </nav>
           </div>
         </div>
@@ -69,12 +70,16 @@ const App: React.FC = () => {
             onEditRequest={handleEditRequest}
             generatedImages={generatedImages}
             onClearHistory={clearGeneratedImages}
+            isProcessing={isProcessing}
+            setIsProcessing={setIsProcessing}
           />
         </div>
         <div className={`h-full ${activeTab === 'edit' ? '' : 'hidden'}`}>
           <EditTab 
             imagesToEdit={imagesToEdit} 
             setImagesToEdit={setImagesToEdit} 
+            isProcessing={isProcessing}
+            setIsProcessing={setIsProcessing}
           />
         </div>
       </main>

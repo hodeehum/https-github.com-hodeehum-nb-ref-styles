@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { ART_STYLES, ART_STYLES_2, COLORS, EXTRA_COLORS, NUM_IMAGES_OPTIONS, RANDOM_PROMPTS, GUIDANCE_OPTIONS, ASPECT_RATIO_OPTIONS } from '../constants';
 import useLocalStorage from '../hooks/useLocalStorage';
@@ -19,6 +18,8 @@ interface GenerateTabProps {
   onEditRequest: (image: GeneratedImage) => void;
   generatedImages: GeneratedImage[];
   onClearHistory: () => void;
+  isProcessing: boolean;
+  setIsProcessing: (isProcessing: boolean) => void;
 }
 
 const defaultValues = {
@@ -36,7 +37,7 @@ const defaultValues = {
   elaborate: false,
 };
 
-const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequest, generatedImages, onClearHistory }) => {
+const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequest, generatedImages, onClearHistory, isProcessing, setIsProcessing }) => {
   const [description, setDescription] = useLocalStorage('description', defaultValues.description);
   const [negative, setNegative] = useLocalStorage('negative', defaultValues.negative);
   const [style1Name, setStyle1Name] = useLocalStorage('style1', defaultValues.style1Name);
@@ -69,7 +70,13 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
       };
       onImagesGenerated([newImage]);
     },
+    setIsProcessing,
   });
+
+  useEffect(() => {
+    // Force aspect ratio to default on initial mount to fix potential persistence issues in some environments.
+    setAspectRatio('1:1');
+  }, []);
 
   useEffect(() => {
     if (!NUM_IMAGES_OPTIONS.includes(numImages)) {
@@ -171,7 +178,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
       <div className="lg:col-span-1 flex flex-col gap-6 overflow-hidden">
-        <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6">
+        <div className={`bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6 transition-opacity ${isProcessing && !isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <h2 className="text-xl font-bold text-white">Generator Settings</h2>
@@ -320,7 +327,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
             ) : (
                 <button
                     onClick={handleGenerate}
-                    disabled={isLoading || isElaborating}
+                    disabled={isProcessing || isElaborating}
                     className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 text-lg shadow-lg"
                 >
                     <IconSparkles />
@@ -334,7 +341,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
             <h3 className="text-xl font-bold text-white">Generation History</h3>
             <button
                 onClick={onClearHistory}
-                disabled={generatedImages.length === 0}
+                disabled={generatedImages.length === 0 || isProcessing}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
                 Clear History

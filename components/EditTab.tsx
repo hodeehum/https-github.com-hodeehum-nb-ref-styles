@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, DragEvent, useRef, useEffect } from 'react';
 import { GeneratedImage, Style, AspectRatio } from '../types';
 import Spinner from './Spinner';
@@ -16,9 +17,11 @@ import { useImageProcessor } from '../hooks/useImageProcessor';
 interface EditTabProps {
   imagesToEdit: GeneratedImage[];
   setImagesToEdit: React.Dispatch<React.SetStateAction<GeneratedImage[]>>;
+  isProcessing: boolean;
+  setIsProcessing: (isProcessing: boolean) => void;
 }
 
-const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
+const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProcessing, setIsProcessing }) => {
   const [editedImages, setEditedImages] = useLocalStorage<GeneratedImage[]>('editHistory', []);
   const [prompt, setPrompt] = useLocalStorage('editPrompt', '');
   const [referenceStyleName, setReferenceStyleName] = useLocalStorage('referenceStyle', 'No style');
@@ -47,8 +50,14 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
         height: newImageData.height,
       };
       setEditedImages(prevImages => [newEditedImage, ...prevImages].slice(0, 12));
-    }
+    },
+    setIsProcessing,
   });
+
+  useEffect(() => {
+    // Force aspect ratio to default on initial mount to fix potential persistence issues in some environments.
+    setAspectRatio('source');
+  }, []);
 
   useEffect(() => {
     if (imagesToEdit.length !== 1) {
@@ -115,23 +124,18 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
                 reader.readAsDataURL(file);
             });
             
-            // Sanitize the image to handle EXIF orientation and potential corruption
-            const sanitized = await sanitizeImage(dataUrl, file.type);
-            
-            const { width, height } = await new Promise<{width: number, height: number}>((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve({ width: img.width, height: img.height });
-                img.onerror = reject;
-                img.src = `data:${sanitized.mimeType};base64,${sanitized.base64}`;
-            });
+            // Sanitize the image to handle EXIF orientation, potential corruption,
+            // and get its safe dimensions.
+            // FIX: The sanitizeImage function expects only one argument (dataUrl).
+            const sanitized = await sanitizeImage(dataUrl);
 
             newImages.push({
                 id: crypto.randomUUID(),
                 base64: sanitized.base64,
                 mimeType: sanitized.mimeType,
                 prompt: 'Uploaded image',
-                width,
-                height,
+                width: sanitized.width,
+                height: sanitized.height,
             });
         } catch (e) {
             const message = e instanceof Error ? e.message : 'An unknown error occurred while processing a file.';
@@ -304,7 +308,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
       <div className="lg:col-span-1 flex flex-col gap-6 overflow-hidden">
-        <div className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6">
+        <div className={`bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6 transition-opacity ${isProcessing && !isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
           <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold text-white">Editor Settings</h2>
@@ -497,7 +501,8 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
           ) : (
               <button
                   onClick={handleEdit}
-                  disabled={isLoading}
+                  disabled={isProcessing || isElaborating || imagesToEdit.length === 0}
+                  title={imagesToEdit.length === 0 ? "Please upload at least one source image to edit." : undefined}
                   className="w-full flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 text-lg shadow-lg"
               >
                   <IconSparkles />
@@ -512,7 +517,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
             <h3 className="text-xl font-bold text-white">Edit History</h3>
             <button
                 onClick={() => setEditedImages([])}
-                disabled={editedImages.length === 0}
+                disabled={editedImages.length === 0 || isProcessing}
                 className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
                 Clear History

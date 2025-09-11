@@ -6,9 +6,10 @@ type ProcessFunction<T> = () => Promise<T>;
 
 interface UseImageProcessorOptions<T> {
   onSuccess: (result: T) => void;
+  setIsProcessing: (isProcessing: boolean) => void;
 }
 
-export const useImageProcessor = <T,>({ onSuccess }: UseImageProcessorOptions<T>) => {
+export const useImageProcessor = <T,>({ onSuccess, setIsProcessing }: UseImageProcessorOptions<T>) => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,8 @@ export const useImageProcessor = <T,>({ onSuccess }: UseImageProcessorOptions<T>
     setIsLoading(false);
     setLoadingMessage('');
     setError("Operation stopped by user.");
-  }, [setError]);
+    setIsProcessing(false);
+  }, [setError, setIsProcessing]);
 
   const start = useCallback(async (
     processFunction: ProcessFunction<T>,
@@ -30,6 +32,7 @@ export const useImageProcessor = <T,>({ onSuccess }: UseImageProcessorOptions<T>
     setIsLoading(true);
     setLoadingMessage(`Preparing to ${processName.toLowerCase()} images...`);
     setError(null);
+    setIsProcessing(true);
 
     let criticalError = null;
 
@@ -108,9 +111,10 @@ export const useImageProcessor = <T,>({ onSuccess }: UseImageProcessorOptions<T>
         }
         setIsLoading(false);
         setLoadingMessage('');
+        setIsProcessing(false);
     }
     // If cancelled, stop() has already handled state changes.
-  }, [onSuccess, stop]);
+  }, [onSuccess, stop, setIsProcessing]);
   
   return { isLoading, loadingMessage, error, start, stop, setError };
 };
