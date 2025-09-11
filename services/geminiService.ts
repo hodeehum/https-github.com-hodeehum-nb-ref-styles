@@ -1,4 +1,5 @@
 
+
 import { GoogleGenAI, Modality } from "@google/genai";
 import { AspectRatio, GeneratedImage } from "../types";
 
@@ -117,12 +118,15 @@ const createCanvasWithImage = async (
     image: GeneratedImage,
     targetAspectRatio: AspectRatio
 ): Promise<{ base64: string; mimeType: 'image/png' }> => {
+    
+    // CRITICAL FIX: Always sanitize the incoming image before processing to prevent crashes.
+    // This handles format conversion (e.g., JPEG -> PNG) and validation (size, corruption).
+    const dataUrl = `data:${image.mimeType};base64,${image.base64}`;
+    const sanitized = await sanitizeImage(dataUrl);
+    const safeImage = { ...image, base64: sanitized.base64, mimeType: sanitized.mimeType, width: sanitized.width, height: sanitized.height };
+
     if (targetAspectRatio === 'source') {
-        // FIX: The function must return a PNG, but the source image could be a JPEG.
-        // Sanitize the image, which will also convert it to PNG.
-        const dataUrl = `data:${image.mimeType};base64,${image.base64}`;
-        const sanitized = await sanitizeImage(dataUrl);
-        return { base64: sanitized.base64, mimeType: sanitized.mimeType };
+        return { base64: safeImage.base64, mimeType: safeImage.mimeType };
     }
 
     const [targetW, targetH] = targetAspectRatio.split(':').map(Number);
@@ -131,7 +135,7 @@ const createCanvasWithImage = async (
     }
     const targetRatio = targetW / targetH;
 
-    const sourceBitmap = await createImageBitmap(await (await fetch(`data:${image.mimeType};base64,${image.base64}`)).blob());
+    const sourceBitmap = await createImageBitmap(await (await fetch(`data:${safeImage.mimeType};base64,${safeImage.base64}`)).blob());
     const sourceW = sourceBitmap.width;
     const sourceH = sourceBitmap.height;
 
@@ -173,8 +177,8 @@ const createCanvasWithImage = async (
     ctx.drawImage(sourceBitmap, offsetX, offsetY, drawW, drawH);
     sourceBitmap.close();
 
-    const dataUrl = canvas.toDataURL('image/png');
-    const base64 = dataUrl.split(',')[1];
+    const canvasDataUrl = canvas.toDataURL('image/png');
+    const base64 = canvasDataUrl.split(',')[1];
 
     if (!base64) {
         throw new Error("Failed to create outpainting canvas.");
@@ -263,8 +267,7 @@ export const generateImage = async (
 export const editImage = async (
     sourceImages: GeneratedImage[],
     prompt: string,
-    aspectRatio: AspectRatio,
-    seed?: number
+    aspectRatio: AspectRatio
 ): Promise<{ base64: string, mimeType: string, width: number, height: number }> => {
     try {
         if (sourceImages.length === 0) {
@@ -287,7 +290,7 @@ export const editImage = async (
         const response = await ai.models.generateContent({
             model: 'gemini-2.5-flash-image-preview',
             contents: { parts },
-            // FIX: Per coding guidelines, only responseModalities is supported for this model.
+            // Per coding guidelines, only responseModalities is supported for this model.
             config: {
                 responseModalities: [Modality.IMAGE, Modality.TEXT],
             },

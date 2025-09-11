@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, DragEvent, useRef, useEffect } from 'react';
 import { GeneratedImage, Style, AspectRatio } from '../types';
 import Spinner from './Spinner';
@@ -30,7 +31,6 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
   const [elaborate, setElaborate] = useLocalStorage('elaboratePrompt', false);
   const [scratchpad, setScratchpad] = useLocalStorage('editScratchpad', '');
   const [showScratchpad, setShowScratchpad] = useLocalStorage('showEditScratchpad', false);
-  const [seed, setSeed] = useLocalStorage('editSeed', '');
   
   const [isElaborating, setIsElaborating] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -38,6 +38,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
   
   const originalPromptRef = useRef('');
   const finalPromptRef = useRef('');
+  const prevImagesToEditLength = useRef(imagesToEdit.length);
 
   const { isLoading, loadingMessage, error, start: startEditing, stop: stopEditing, setError } = useImageProcessor({
     onSuccess: (newImageData: { base64: string, mimeType: string, width: number, height: number }) => {
@@ -53,6 +54,15 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
     },
     setIsProcessing,
   });
+
+  useEffect(() => {
+    // If images were added (and not just removed), it signifies a new editing session.
+    // Clear the previous results to avoid confusion.
+    if (imagesToEdit.length > prevImagesToEditLength.current && editedImages.length > 0) {
+        setEditedImages([]);
+    }
+    prevImagesToEditLength.current = imagesToEdit.length;
+  }, [imagesToEdit, editedImages.length, setEditedImages]);
 
   useEffect(() => {
     // Force aspect ratio to default on initial mount to fix potential persistence issues in some environments.
@@ -84,12 +94,11 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
     setNumImages(1);
     setElaborate(false);
     setAspectRatio('source');
-    setSeed('');
     originalPromptRef.current = '';
     setError(null);
     setScratchpad('');
     setShowScratchpad(false);
-  }, [setImagesToEdit, setEditedImages, setPrompt, setReferenceStyleName, setNumImages, setElaborate, setAspectRatio, setSeed, setScratchpad, setShowScratchpad, setError]);
+  }, [setImagesToEdit, setEditedImages, setPrompt, setReferenceStyleName, setNumImages, setElaborate, setAspectRatio, setScratchpad, setShowScratchpad, setError]);
 
   const processFiles = useCallback(async (files: File[]) => {
     if (!files || files.length === 0) return;
@@ -126,7 +135,6 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
             
             // Sanitize the image to handle EXIF orientation, potential corruption,
             // and get its safe dimensions.
-            // FIX: The sanitizeImage function expects only one argument (dataUrl).
             const sanitized = await sanitizeImage(dataUrl);
 
             newImages.push({
@@ -147,9 +155,8 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
 
     if (newImages.length > 0) {
         setImagesToEdit(prev => [...prev, ...newImages].slice(-8)); // Use slice to be extra safe
-        if (editedImages.length > 0) setEditedImages([]);
     }
-  }, [imagesToEdit.length, editedImages.length, setImagesToEdit, setEditedImages, setError]);
+  }, [imagesToEdit.length, setImagesToEdit, setError]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -275,7 +282,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
       
       finalPromptRef.current = finalPrompt;
 
-      const processFunction = () => editImage(imagesToEdit, finalPrompt, aspectRatio, seed ? parseInt(seed, 10) : undefined);
+      const processFunction = () => editImage(imagesToEdit, finalPrompt, aspectRatio);
       
       await startEditing(processFunction, numImages, 'Applying edit');
 
@@ -303,7 +310,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
       <div className="lg:col-span-1 flex flex-col gap-6 overflow-hidden">
-        <div className={`bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6 transition-opacity ${isProcessing && !isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+        <fieldset disabled={isProcessing} className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6 transition-opacity disabled:opacity-50">
           <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold text-white">Editor Settings</h2>
@@ -456,33 +463,10 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
                       When using a single source image, you can select an aspect ratio to expand the canvas. The AI will attempt to fill the new space (outpainting).
                     </p>
                   </div>
-                  <div>
-                    <label htmlFor="edit-seed" className="block text-sm font-medium text-gray-300 mb-1">Seed</label>
-                    <div className="relative">
-                        <input
-                            type="number"
-                            id="edit-seed"
-                            min="0"
-                            value={seed}
-                            onChange={e => setSeed(e.target.value)}
-                            className="w-full bg-gray-700 border border-gray-600 rounded-lg p-2.5 pr-24 text-white placeholder-gray-400 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition"
-                            placeholder="Random"
-                        />
-                        <div className="absolute top-1/2 right-2 -translate-y-1/2 flex items-center gap-2">
-                             <button onClick={() => setSeed('')} title="Clear Seed" className="block bg-gray-600 p-2 rounded-md hover:bg-gray-500 transition-colors text-gray-300">
-                                <IconBrain />
-                            </button>
-                            <button onClick={() => setSeed(String(Math.floor(Math.random() * 2147483647)))} title="Generate Random Seed" className="block bg-gray-600 p-2 rounded-md hover:bg-gray-500 transition-colors text-gray-300">
-                                <IconDice />
-                            </button>
-                        </div>
-                    </div>
-                    <p className="text-xs text-gray-400 mt-1 px-1">Leave blank for a random seed.</p>
-                  </div>
               </div>
           </div>
           {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-        </div>
+        </fieldset>
         
         <div className="flex-shrink-0">
           {isLoading ? (
@@ -536,6 +520,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
                         images={editedImages} 
                         onEdit={handleEditResultImage} 
                         onImageClick={setSelectedImage}
+                        isProcessing={isProcessing}
                         emptyStateText="Edited images will appear here."
                     />
                 </>

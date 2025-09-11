@@ -7,9 +7,10 @@ interface ImageGalleryProps {
   onEdit: (image: GeneratedImage) => void;
   onImageClick: (image: GeneratedImage) => void;
   emptyStateText: string;
+  isProcessing?: boolean;
 }
 
-const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClick, emptyStateText }) => {
+const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClick, emptyStateText, isProcessing = false }) => {
   if (images.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full bg-gray-800/50 p-8 rounded-2xl border-2 border-dashed border-gray-700 text-center">
@@ -52,7 +53,13 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClic
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <div className="absolute bottom-0 left-0 p-4 w-full">
                 <div className="flex justify-center gap-2">
-                  <button onClick={(e) => { e.stopPropagation(); onEdit(image); }} className="p-2 bg-black/50 rounded-full text-white hover:bg-indigo-600 transition-colors" title="Edit this image"><IconEdit className="w-5 h-5"/></button>
+                  <button 
+                    disabled={isProcessing}
+                    onClick={(e) => { e.stopPropagation(); onEdit(image); }} 
+                    className="p-2 bg-black/50 rounded-full text-white hover:bg-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                    title="Edit this image">
+                      <IconEdit className="w-5 h-5"/>
+                  </button>
                   <button onClick={(e) => { e.stopPropagation(); handleDownload(image); }} className="p-2 bg-black/50 rounded-full text-white hover:bg-indigo-600 transition-colors" title="Download as PNG"><IconDownload className="w-5 h-5"/></button>
                   <button onClick={(e) => { e.stopPropagation(); handleCopyPrompt(image.prompt); }} className="p-2 bg-black/50 rounded-full text-white hover:bg-indigo-600 transition-colors" title="Copy prompt"><IconClipboard className="w-5 h-5"/></button>
                 </div>

@@ -44,7 +44,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
   const [numImages, setNumImages] = useLocalStorage('numImages', 1);
   const [guidance, setGuidance] = useLocalStorage('guidance', defaultValues.guidance);
   const [seed, setSeed] = useLocalStorage('generateSeed', '');
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(defaultValues.aspectRatio);
+  const [aspectRatio, setAspectRatio] = useLocalStorage<AspectRatio>('generateAspectRatio', defaultValues.aspectRatio);
   const [scratchpad, setScratchpad] = useLocalStorage('scratchpad', defaultValues.scratchpad);
   const [showScratchpad, setShowScratchpad] = useLocalStorage('showScratchpad', defaultValues.showScratchpad);
   const [elaborate, setElaborate] = useLocalStorage('elaboratePromptGenerate', defaultValues.elaborate);
@@ -69,11 +69,6 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
     },
     setIsProcessing,
   });
-
-  useEffect(() => {
-    // Force aspect ratio to default on initial mount to fix potential persistence issues in some environments.
-    setAspectRatio('1:1');
-  }, []);
 
   useEffect(() => {
     if (!NUM_IMAGES_OPTIONS.includes(numImages)) {
@@ -173,7 +168,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-full">
       <div className="lg:col-span-1 flex flex-col gap-6 overflow-hidden">
-        <div className={`bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6 transition-opacity ${isProcessing && !isLoading ? 'opacity-50 pointer-events-none' : ''}`}>
+        <fieldset disabled={isProcessing} className="bg-gray-800/50 p-6 rounded-2xl border border-gray-700 overflow-y-auto flex-grow pr-4 space-y-6 transition-opacity disabled:opacity-50">
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <h2 className="text-xl font-bold text-white">Generator Settings</h2>
@@ -289,7 +284,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
                 <p className="text-xs text-gray-400 mt-1 px-1">Leave blank for a random seed.</p>
             </div>
             {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
-        </div>
+        </fieldset>
 
         <div className="flex-shrink-0">
              {isLoading ? (
@@ -341,6 +336,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
                         images={generatedImages} 
                         onEdit={onEditRequest} 
                         onImageClick={setSelectedImage}
+                        isProcessing={isProcessing}
                         emptyStateText="Generated images will appear here."
                     />
                 </>
