@@ -28,7 +28,7 @@ const defaultValues = {
   style2Name: 'No style',
   color: 'none',
   extraColor: 'none',
-  numImages: 2,
+  numImages: 1,
   guidance: 7,
   aspectRatio: '1:1' as AspectRatio,
   scratchpad: '',
@@ -46,7 +46,7 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
   const [numImages, setNumImages] = useLocalStorage('numImages', defaultValues.numImages);
   const [guidance, setGuidance] = useLocalStorage('guidance', defaultValues.guidance);
   const [seed, setSeed] = useLocalStorage('generateSeed', '');
-  const [aspectRatio, setAspectRatio] = useLocalStorage<AspectRatio>('aspectRatio', defaultValues.aspectRatio);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>(defaultValues.aspectRatio);
   const [scratchpad, setScratchpad] = useLocalStorage('scratchpad', defaultValues.scratchpad);
   const [showScratchpad, setShowScratchpad] = useLocalStorage('showScratchpad', defaultValues.showScratchpad);
   const [elaborate, setElaborate] = useLocalStorage('elaboratePromptGenerate', defaultValues.elaborate);
@@ -73,17 +73,9 @@ const GenerateTab: React.FC<GenerateTabProps> = ({ onImagesGenerated, onEditRequ
 
   useEffect(() => {
     if (!NUM_IMAGES_OPTIONS.includes(numImages)) {
-      setNumImages(2);
+      setNumImages(1);
     }
   }, [numImages, setNumImages]);
-  
-  useEffect(() => {
-    // Ensure 'source' aspect ratio is not used on the generate tab, correcting
-    // any value that might be loaded from local storage.
-    if (aspectRatio === 'source') {
-      setAspectRatio('1:1');
-    }
-  }, [aspectRatio, setAspectRatio]);
 
   const style1 = useMemo(() => ART_STYLES.find(s => s.name === style1Name) || ART_STYLES[0], [style1Name]);
   const style2 = useMemo(() => ART_STYLES_2.find(s => s.name === style2Name) || ART_STYLES_2[0], [style2Name]);

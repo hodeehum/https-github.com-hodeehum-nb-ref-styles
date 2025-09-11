@@ -1,6 +1,3 @@
-
-
-
 import React from 'react';
 import { GeneratedImage } from '../types';
 import { IconDownload, IconEdit, IconClipboard } from './Icons';
@@ -40,18 +37,17 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClic
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {images.map((image) => {
-        const aspectRatio = image.width && image.height ? `${image.width} / ${image.height}` : '1 / 1';
         return (
           <div 
             key={image.id} 
-            className="group relative overflow-hidden rounded-2xl shadow-lg border border-gray-700 cursor-pointer"
-            style={{ aspectRatio }}
+            className="group relative overflow-hidden rounded-2xl shadow-lg border border-gray-700 cursor-pointer bg-gray-900"
+            style={{ aspectRatio: '1 / 1' }}
             onClick={() => onImageClick(image)}
           >
             <img
               src={`data:${image.mimeType};base64,${image.base64}`}
               alt={image.prompt}
-              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <div className="absolute bottom-0 left-0 p-4 w-full">

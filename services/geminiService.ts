@@ -62,6 +62,11 @@ const cropWatermarkFromImage = (
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      // Robust validation for the image returned from the API to prevent crashes.
+      if (!isFinite(img.width) || !isFinite(img.height) || img.width <= 0 || img.height <= 0) {
+        return reject(new Error("The image returned by the model has invalid dimensions (e.g., width or height is zero). This may be due to a model error or safety filter."));
+      }
+
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -77,22 +82,38 @@ const cropWatermarkFromImage = (
       const sourceWidth = img.width;
       const sourceHeight = (img.height > watermarkHeight) ? img.height - watermarkHeight : img.height;
       
-      canvas.width = sourceWidth;
-      canvas.height = sourceHeight;
+      // Ensure canvas dimensions are valid and at least 1px to prevent errors.
+      canvas.width = Math.max(1, sourceWidth);
+      canvas.height = Math.max(1, sourceHeight);
+      
+      if (!isFinite(canvas.width) || !isFinite(canvas.height)) {
+          return reject(new Error("Calculated canvas dimensions for cropping are invalid."));
+      }
 
-      // Use high quality interpolation just in case (browser default might be low).
       ctx.imageSmoothingQuality = 'high';
       
-      // Draw the cropped image onto the canvas.
-      ctx.drawImage(img, 0, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+      try {
+        // Draw the cropped image onto the canvas.
+        ctx.drawImage(img, 0, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height);
+      } catch (e) {
+          console.error("Error during watermark crop drawImage:", e, {
+              imgW: img.width, imgH: img.height,
+              canvasW: canvas.width, canvasH: canvas.height,
+          });
+          return reject(new Error("Failed to crop watermark from the returned image. It might be corrupt."));
+      }
       
       const dataUrl = canvas.toDataURL(mimeType as 'image/png' | 'image/jpeg');
       const newBase64 = dataUrl.split(',')[1];
+
+      if (!newBase64) {
+        return reject(new Error("Failed to generate a valid image after cropping."));
+      }
       
       resolve({ base64: newBase64, mimeType, width: canvas.width, height: canvas.height });
     };
     img.onerror = () => {
-      reject(new Error("Failed to load image for processing."));
+      reject(new Error("Failed to load the model's output image for processing. It may be corrupt or in an unsupported format."));
     };
     img.src = `data:${mimeType};base64,${base64}`;
   });
@@ -134,17 +155,13 @@ export const generateImage = async (
         },
     });
 
-    if (!response.generatedImages || response.generatedImages.length === 0) {
-      throw new Error("The model did not return an image. This could be due to safety filters or an internal error.");
-    }
-    
-    const imageData = response.generatedImages[0];
-    const base64 = imageData.image.imageBytes;
-    
-    if (!base64) {
-        throw new Error("No image data was returned from the generation operation.");
-    }
+    const imageData = response?.generatedImages?.[0];
+    const base64 = imageData?.image?.imageBytes;
 
+    if (!base64) {
+      throw new Error("The model did not return a valid image. This could be due to safety filters or an internal error.");
+    }
+    
     // The 'generateImages' API generally throws an error for blocked prompts, 
     // which is handled by getApiError. Direct safety feedback isn't typically in the response body.
 
@@ -164,6 +181,11 @@ const createCanvasWithImage = (
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
+      // More robust validation for image dimensions to prevent division-by-zero or other rendering errors.
+      if (!isFinite(img.width) || !isFinite(img.height) || img.width <= 0 || img.height <= 0) {
+        return reject(new Error("Source image has invalid dimensions (e.g., width or height is zero, negative, or not a number)."));
+      }
+
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -172,6 +194,11 @@ const createCanvasWithImage = (
       
       const [targetW, targetH] = targetAspectRatio.split(':').map(Number);
       
+      // Validate the parsed aspect ratio numbers.
+      if (!isFinite(targetW) || !isFinite(targetH) || targetW <= 0 || targetH <= 0) {
+          return reject(new Error(`Invalid target aspect ratio provided: ${targetAspectRatio}`));
+      }
+
       const baseDimension = 1024;
       if (targetW > targetH) {
           canvas.width = baseDimension;
@@ -181,34 +208,63 @@ const createCanvasWithImage = (
           canvas.width = Math.round((baseDimension * targetW) / targetH);
       }
 
+      // Ensure calculated canvas dimensions are valid.
+      if (!isFinite(canvas.width) || !isFinite(canvas.height) || canvas.width <= 0 || canvas.height <= 0) {
+          return reject(new Error("Calculated canvas dimensions are invalid, which could result from an extreme aspect ratio."));
+      }
+
       ctx.fillStyle = 'black';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
-      const canvasAspectRatio = canvas.width / canvas.height;
-      const imageAspectRatio = img.width / img.height;
+      // Use a standard, numerically stable algorithm for "contain" logic to prevent floating-point errors.
+      const scale = Math.min(canvas.width / img.width, canvas.height / img.height);
+      const drawWidth = img.width * scale;
+      const drawHeight = img.height * scale;
+      const offsetX = (canvas.width - drawWidth) / 2;
+      const offsetY = (canvas.height - drawHeight) / 2;
+
+      // Round all calculated values and ensure width/height are at least 1px.
+      // This prevents crashes from sub-pixel rendering that might round down to 0.
+      const finalOffsetX = Math.round(offsetX);
+      const finalOffsetY = Math.round(offsetY);
+      const finalDrawWidth = Math.max(1, Math.round(drawWidth));
+      const finalDrawHeight = Math.max(1, Math.round(drawHeight));
       
-      let drawWidth, drawHeight, offsetX, offsetY;
-      
-      if (canvasAspectRatio > imageAspectRatio) {
-        drawHeight = canvas.height;
-        drawWidth = drawHeight * imageAspectRatio;
-        offsetX = (canvas.width - drawWidth) / 2;
-        offsetY = 0;
-      } else {
-        drawWidth = canvas.width;
-        drawHeight = drawWidth / imageAspectRatio;
-        offsetX = 0;
-        offsetY = (canvas.height - drawHeight) / 2;
+      try {
+        // Final check for finite values before drawing to prevent crashes.
+        if (
+            !isFinite(finalOffsetX) || !isFinite(finalOffsetY) ||
+            !isFinite(finalDrawWidth) || !isFinite(finalDrawHeight)
+        ) {
+            throw new Error(`Invalid draw parameters calculated: ${JSON.stringify({
+                offsetX: finalOffsetX, 
+                offsetY: finalOffsetY, 
+                drawWidth: finalDrawWidth, 
+                drawHeight: finalDrawHeight
+            })}`);
+        }
+        ctx.drawImage(img, finalOffsetX, finalOffsetY, finalDrawWidth, finalDrawHeight);
+      } catch(e) {
+        console.error("Error during canvas drawImage:", e, {
+            imgW: img.width, imgH: img.height,
+            canvasW: canvas.width, canvasH: canvas.height,
+            drawW: finalDrawWidth, drawH: finalDrawHeight,
+            offsetX: finalOffsetX, offsetY: finalOffsetY
+        });
+        return reject(new Error("Failed to draw image on canvas. The image might be corrupt or have unusual dimensions."));
       }
-      
-      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       
       const dataUrl = canvas.toDataURL('image/png');
       const base64 = dataUrl.split(',')[1];
+      
+      if (!base64) {
+        return reject(new Error("Failed to generate a valid image from the canvas. This may happen with very large or invalid images."));
+      }
+      
       resolve({ base64, mimeType: 'image/png' });
     };
     img.onerror = () => {
-      reject(new Error("Failed to load source image for canvas composition."));
+      reject(new Error("Failed to load source image for canvas composition. It might be corrupt or in an unsupported format."));
     };
     img.src = `data:${sourceImage.mimeType};base64,${sourceImage.base64}`;
   });

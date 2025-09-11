@@ -1,6 +1,5 @@
 
-
-import React, { useState, useMemo, useCallback, DragEvent, useRef } from 'react';
+import React, { useState, useMemo, useCallback, DragEvent, useRef, useEffect } from 'react';
 import { GeneratedImage, Style, AspectRatio } from '../types';
 import Spinner from './Spinner';
 import { editImage, elaboratePrompt } from '../services/geminiService';
@@ -24,8 +23,8 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
   const [editedImages, setEditedImages] = useLocalStorage<GeneratedImage[]>('editHistory', []);
   const [prompt, setPrompt] = useLocalStorage('editPrompt', '');
   const [referenceStyleName, setReferenceStyleName] = useLocalStorage('referenceStyle', 'No style');
-  const [numImages, setNumImages] = useLocalStorage('editNumImages', 2);
-  const [aspectRatio, setAspectRatio] = useLocalStorage<AspectRatio>('editAspectRatio', 'source');
+  const [numImages, setNumImages] = useLocalStorage('editNumImages', 1);
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('source');
   const [elaborate, setElaborate] = useLocalStorage('elaboratePrompt', false);
   const [scratchpad, setScratchpad] = useLocalStorage('editScratchpad', '');
   const [showScratchpad, setShowScratchpad] = useLocalStorage('showEditScratchpad', false);
@@ -52,6 +51,12 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
     }
   });
 
+  useEffect(() => {
+    if (imagesToEdit.length !== 1) {
+      setAspectRatio('source');
+    }
+  }, [imagesToEdit.length, setAspectRatio]);
+
   const defaultPrompt = imagesToEdit.length > 0
     ? 'Make the person from @img1 wear sunglasses.'
     : 'A majestic lion in a futuristic city, rendered using @style';
@@ -68,7 +73,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit }) => {
     setEditedImages([]);
     setPrompt('');
     setReferenceStyleName('No style');
-    setNumImages(2);
+    setNumImages(1);
     setElaborate(false);
     setAspectRatio('source');
     setSeed('');
