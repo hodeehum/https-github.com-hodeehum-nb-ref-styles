@@ -11,7 +11,6 @@ import { resolveRandomChoices } from '../services/promptUtils';
 import ToggleSwitch from './ToggleSwitch';
 import useLocalStorage from '../hooks/useLocalStorage';
 import ImageModal from './ImageModal';
-import AspectRatioSelect from './AspectRatioSelect';
 import ImageGallery from './ImageGallery';
 import { useImageProcessor } from '../hooks/useImageProcessor';
 
@@ -27,7 +26,6 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
   const [prompt, setPrompt] = useLocalStorage('editPrompt', '');
   const [referenceStyleName, setReferenceStyleName] = useLocalStorage('referenceStyle', 'No style');
   const [numImages, setNumImages] = useLocalStorage('editNumImages', 1);
-  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('source');
   const [elaborate, setElaborate] = useLocalStorage('elaboratePrompt', false);
   const [scratchpad, setScratchpad] = useLocalStorage('editScratchpad', '');
   const [showScratchpad, setShowScratchpad] = useLocalStorage('showEditScratchpad', false);
@@ -64,17 +62,6 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
     prevImagesToEditLength.current = imagesToEdit.length;
   }, [imagesToEdit, editedImages.length, setEditedImages]);
 
-  useEffect(() => {
-    // Force aspect ratio to default on initial mount to fix potential persistence issues in some environments.
-    setAspectRatio('source');
-  }, []);
-
-  useEffect(() => {
-    if (imagesToEdit.length !== 1) {
-      setAspectRatio('source');
-    }
-  }, [imagesToEdit.length, setAspectRatio]);
-
   const defaultPrompt = imagesToEdit.length > 0
     ? 'Make the person from @img1 wear sunglasses.'
     : 'A majestic lion in a futuristic city, rendered using @style';
@@ -93,12 +80,11 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
     setReferenceStyleName('No style');
     setNumImages(1);
     setElaborate(false);
-    setAspectRatio('source');
     originalPromptRef.current = '';
     setError(null);
     setScratchpad('');
     setShowScratchpad(false);
-  }, [setImagesToEdit, setEditedImages, setPrompt, setReferenceStyleName, setNumImages, setElaborate, setAspectRatio, setScratchpad, setShowScratchpad, setError]);
+  }, [setImagesToEdit, setEditedImages, setPrompt, setReferenceStyleName, setNumImages, setElaborate, setScratchpad, setShowScratchpad, setError]);
 
   const processFiles = useCallback(async (files: File[]) => {
     if (!files || files.length === 0) return;
@@ -282,7 +268,7 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
       
       finalPromptRef.current = finalPrompt;
 
-      const processFunction = () => editImage(imagesToEdit, finalPrompt, aspectRatio);
+      const processFunction = () => editImage(imagesToEdit, finalPrompt);
       
       await startEditing(processFunction, numImages, 'Applying edit');
 
@@ -451,17 +437,6 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
                           </optgroup>
                         ))}
                       </Select>
-                  </div>
-                  <div>
-                    <AspectRatioSelect 
-                      label="Aspect Ratio" 
-                      value={aspectRatio} 
-                      onChange={setAspectRatio}
-                      disabled={imagesToEdit.length !== 1} 
-                    />
-                    <p className="text-xs text-gray-400 mt-1 px-1">
-                      When using a single source image, you can select an aspect ratio to expand the canvas. The AI will attempt to fill the new space (outpainting).
-                    </p>
                   </div>
               </div>
           </div>

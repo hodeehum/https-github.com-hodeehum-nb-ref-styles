@@ -38,11 +38,12 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClic
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {images.map((image) => {
+        const aspectRatio = image.width && image.height ? `${image.width} / ${image.height}` : '1 / 1';
         return (
           <div 
             key={image.id} 
             className="group relative overflow-hidden rounded-2xl shadow-lg border border-gray-700 cursor-pointer bg-gray-900"
-            style={{ aspectRatio: '1 / 1' }}
+            style={{ aspectRatio }}
             onClick={() => onImageClick(image)}
           >
             <img
