@@ -1,5 +1,4 @@
 
-
 import React, { useState, useMemo, useCallback, DragEvent, useRef, useEffect } from 'react';
 import { GeneratedImage, Style, AspectRatio } from '../types';
 import Spinner from './Spinner';
@@ -20,6 +19,11 @@ interface EditTabProps {
   isProcessing: boolean;
   setIsProcessing: (isProcessing: boolean) => void;
 }
+
+// Bulletproof validation to ensure dimensions are valid numbers before use in CSS.
+const isValidDimension = (num: number | undefined): num is number => {
+  return typeof num === 'number' && Number.isFinite(num) && num > 0;
+};
 
 const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProcessing, setIsProcessing }) => {
   const [editedImages, setEditedImages] = useLocalStorage<GeneratedImage[]>('editHistory', []);
@@ -340,18 +344,22 @@ const EditTab: React.FC<EditTabProps> = ({ imagesToEdit, setImagesToEdit, isProc
                 {imagesToEdit.length > 0 && (
                   <div className="grid grid-cols-2 gap-4 mb-4">
                       {imagesToEdit.map((image, index) => {
-                        const aspectRatio = image.width && image.height ? `${image.width} / ${image.height}` : '1 / 1';
+                        // Use the robust validation to prevent rendering bugs.
+                        const aspectRatio = isValidDimension(image.width) && isValidDimension(image.height)
+                          ? `${image.width} / ${image.height}`
+                          : '1 / 1';
                         return (
                           <div key={image.id}>
                               <div className="text-center text-xs font-mono text-gray-400 mb-1">
                                   @img{index + 1}
                               </div>
                               <div 
-                                  className="relative group cursor-pointer"
+                                  className="relative group cursor-pointer bg-black/20 rounded-lg overflow-hidden"
                                   style={{ aspectRatio }}
                                   onClick={() => setSelectedImage(image)}
                               >
-                                  <img src={`data:${image.mimeType};base64,${image.base64}`} alt={`Source ${index + 1}`} className="w-full h-full object-cover rounded-md border-2 border-transparent group-hover:border-indigo-500 transition-colors"/>
+                                  <img src={`data:${image.mimeType};base64,${image.base64}`} alt={`Source ${index + 1}`} className="absolute inset-0 w-full h-full object-contain transition-transform duration-200 group-hover:scale-105"/>
+                                  <div className="absolute inset-0 border-2 border-transparent group-hover:border-indigo-500 rounded-md transition-colors pointer-events-none"></div>
                                   <button 
                                       onClick={(e) => {
                                           e.stopPropagation();

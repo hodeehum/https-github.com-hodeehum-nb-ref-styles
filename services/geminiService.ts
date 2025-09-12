@@ -88,12 +88,32 @@ export const sanitizeImage = async (
     }
 
     const bitmap = await createImageBitmap(blob);
-    const { width, height } = bitmap;
+    let { width, height } = bitmap;
+
+    // ROBUSTNESS FIX: Prevent UI bugs by ensuring dimensions are valid, finite, positive numbers.
+    if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+        bitmap.close();
+        throw new Error("Image has invalid dimensions (e.g., zero, negative, or non-finite) and cannot be processed.");
+    }
 
     const MAX_PIXELS = 16 * 1024 * 1024; // 16 megapixels
      if (width * height > MAX_PIXELS) {
         bitmap.close();
         throw new Error(`Image dimensions (${width}x${height}) are too large. Please use an image under 16 megapixels.`);
+    }
+
+    // PERFORMANCE OPTIMIZATION: Smartly downscale large images to speed up uploads and API processing.
+    const MAX_DIMENSION = 1024;
+    if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+        if (width > height) {
+            const ratio = height / width;
+            width = MAX_DIMENSION;
+            height = Math.round(width * ratio);
+        } else {
+            const ratio = width / height;
+            height = MAX_DIMENSION;
+            width = Math.round(height * ratio);
+        }
     }
 
     canvas.width = width;
@@ -105,7 +125,7 @@ export const sanitizeImage = async (
         throw new Error('Could not get canvas context for image sanitization.');
     }
 
-    ctx.drawImage(bitmap, 0, 0);
+    ctx.drawImage(bitmap, 0, 0, width, height);
     bitmap.close();
 
     // MEMORY CRASH FIX: Intelligently preserve JPEG format for photos to avoid memory bloat.
@@ -144,27 +164,39 @@ const postProcessApiImage = async (base64Image: string, mimeType: string): Promi
         const blob = dataUrlToBlob(dataUrl);
         const bitmap = await createImageBitmap(blob);
 
-        let sourceW = bitmap.width;
-        let sourceH = bitmap.height;
+        let width = bitmap.width;
+        let height = bitmap.height;
 
-        const MAX_API_PIXELS = 8 * 1024 * 1024; // 8 MP limit
-        if (sourceW * sourceH > MAX_API_PIXELS) {
-            const ratio = sourceW / sourceH;
-            sourceH = Math.sqrt(MAX_API_PIXELS / ratio);
-            sourceW = sourceH * ratio;
+        // ROBUSTNESS FIX: Prevent UI bugs by ensuring dimensions are valid, finite, positive numbers.
+        if (!Number.isFinite(width) || width <= 0 || !Number.isFinite(height) || height <= 0) {
+            bitmap.close();
+            throw new Error("API returned an image with invalid dimensions (e.g., zero, negative, or non-finite).");
         }
-        const finalWidth = Math.round(sourceW);
-        const finalHeight = Math.round(sourceH);
 
-        canvas.width = finalWidth;
-        canvas.height = finalHeight;
+        // UNIFIED RESIZING FIX: Apply the same aggressive resizing to API images
+        // as we do to user uploads. This is the key to preventing memory-related rendering crashes.
+        const MAX_DIMENSION = 1024;
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+            if (width > height) {
+                const ratio = height / width;
+                width = MAX_DIMENSION;
+                height = Math.round(width * ratio);
+            } else {
+                const ratio = width / height;
+                height = MAX_DIMENSION;
+                width = Math.round(height * ratio);
+            }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
             bitmap.close();
             throw new Error("Could not create canvas context for post-processing.");
         }
 
-        ctx.drawImage(bitmap, 0, 0, finalWidth, finalHeight);
+        ctx.drawImage(bitmap, 0, 0, width, height);
         bitmap.close();
 
         // MEMORY CRASH FIX: Preserve JPEG format from API to avoid bloat.
@@ -178,7 +210,7 @@ const postProcessApiImage = async (base64Image: string, mimeType: string): Promi
             throw new Error("Failed to create final processed image.");
         }
 
-        return { base64: finalBase64, mimeType: outputMimeType, width: finalWidth, height: finalHeight };
+        return { base64: finalBase64, mimeType: outputMimeType, width, height };
     } catch (e) {
         const message = e instanceof Error ? e.message : 'An unknown error occurred while processing the API image.';
         console.error("API Image Post-Processing Error:", message);

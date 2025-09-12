@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { GeneratedImage } from '../types';
 import { IconDownload, IconEdit, IconClipboard } from './Icons';
@@ -9,6 +10,11 @@ interface ImageGalleryProps {
   emptyStateText: string;
   isProcessing?: boolean;
 }
+
+// Bulletproof validation to ensure dimensions are valid numbers before use in CSS.
+const isValidDimension = (num: number | undefined): num is number => {
+  return typeof num === 'number' && Number.isFinite(num) && num > 0;
+};
 
 const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClick, emptyStateText, isProcessing = false }) => {
   if (images.length === 0) {
@@ -38,18 +44,22 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClic
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {images.map((image) => {
-        const aspectRatio = image.width && image.height ? `${image.width} / ${image.height}` : '1 / 1';
+        // Use the robust validation to prevent rendering bugs.
+        const aspectRatio = isValidDimension(image.width) && isValidDimension(image.height)
+          ? `${image.width} / ${image.height}`
+          : '1 / 1';
+          
         return (
           <div 
             key={image.id} 
-            className="group relative overflow-hidden rounded-2xl shadow-lg border border-gray-700 cursor-pointer bg-gray-900"
+            className="group relative rounded-2xl shadow-lg border border-gray-700 cursor-pointer bg-gray-900 overflow-hidden"
             style={{ aspectRatio }}
             onClick={() => onImageClick(image)}
           >
             <img
               src={`data:${image.mimeType};base64,${image.base64}`}
               alt={image.prompt}
-              className="w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
+              className="absolute inset-0 w-full h-full object-contain transition-transform duration-300 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <div className="absolute bottom-0 left-0 p-4 w-full">
@@ -61,7 +71,7 @@ const ImageGallery: React.FC<ImageGalleryProps> = ({ images, onEdit, onImageClic
                     title="Edit this image">
                       <IconEdit className="w-5 h-5"/>
                   </button>
-                  <button onClick={(e) => { e.stopPropagation(); handleDownload(image); }} className="p-2 bg-black/50 rounded-full text-white hover:bg-indigo-600 transition-colors" title="Download as PNG"><IconDownload className="w-5 h-5"/></button>
+                  <button onClick={(e) => { e.stopPropagation(); handleDownload(image); }} className="p-2 bg-black/50 rounded-full text-white hover:bg-indigo-600 transition-colors" title="Download image"><IconDownload className="w-5 h-5"/></button>
                   <button onClick={(e) => { e.stopPropagation(); handleCopyPrompt(image.prompt); }} className="p-2 bg-black/50 rounded-full text-white hover:bg-indigo-600 transition-colors" title="Copy prompt"><IconClipboard className="w-5 h-5"/></button>
                 </div>
               </div>
